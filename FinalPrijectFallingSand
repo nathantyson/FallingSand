@@ -1,0 +1,189 @@
+//Nathan Tyson
+//CITA 130-01
+//Final Project - Falling Sand Game
+//12-8-21
+/*
+Controls -
+
+    Mouse Scroll Wheel- Changes particle placement size.
+
+    Mouse Scroll Wheel Press- Places Rock.
+
+    Mouse Left Click (first toggle)- Places Sand.
+
+    Mouse Right Click (first toggle)- Places Water.
+
+    SpaceBar- Toggles control to other particle types.
+
+    Mouse Left Click (second toggle)- Places Oil.
+
+    Mouse Right Click (second toggle)- Places Fire.
+
+*/
+//--------------------------------
+//Setup physics of particles/brush boolean
+byte[] world;
+boolean[] hasMoved;
+int[] momentum;
+
+PGraphics worldgraphics;
+
+int brushSize = 1;
+boolean toggle = false;
+//---------------------------------
+//Setting up bytes to differentiate particles
+final int WIDTH=256;
+final int HEIGHT=256;
+final int SCALE_FACTOR = 4;
+
+final byte AIR = 0;
+final byte ROCK = 1;
+final byte SAND = 2;
+final byte WATER = 3;
+final byte OIL = 4;
+final byte FIRE = 5;
+//----------------------------------
+
+void setup() {
+  size(1024, 1024, P3D);
+  
+  //----------------------------------------------
+  //Prevent smoothing of particles when scaling
+  worldgraphics = createGraphics(WIDTH, HEIGHT);
+  ((PGraphicsOpenGL)g).textureSampling(2); 
+  //----------------------------------------------
+  //Initialize world and physics
+  world = new byte[WIDTH*HEIGHT];
+  hasMoved = new boolean[WIDTH*HEIGHT];
+  momentum = new int[WIDTH*HEIGHT];
+  //---------------------------------------------
+  //Setup world appearance upon start
+  for (int y=HEIGHT-10; y<HEIGHT; ++y) {
+    for (int x=0; x<WIDTH; ++x) {
+      world[coord(x,y)] = ROCK;
+    }
+  }
+  for (int y=100; y<110; ++y) {
+    for (int x=100; x<110; ++x) {
+      world[coord(x,y)] = SAND;
+    }
+  }
+  
+  frameRate(30);
+}
+
+void draw() {
+  //-----------------------------------------------------------------------
+  //WORLD DRAW
+  worldgraphics.beginDraw();
+  worldgraphics.loadPixels();
+  for (int y=0; y<HEIGHT; ++y) {
+    for (int x=0; x<WIDTH; ++x) {
+      int coordHere = coord(x,y);
+      
+      byte whatHere = world[coordHere];
+      color c;
+            
+      switch (whatHere) {
+        case AIR: c = color(0,0,0); break;
+        case ROCK: c = color(100,100,100); break;
+        case WATER: c = color(0,80,255); break;
+        case SAND: c = color(255,230,0); break;
+        case OIL: c = color(180,80,180); break;
+        case FIRE: c = color(255,80,0); break;
+        default: c = color(255,0,0); break;
+      }
+      
+      worldgraphics.pixels[coordHere] = c;
+    }
+  }
+  worldgraphics.updatePixels();
+  worldgraphics.endDraw();
+  
+  scale(SCALE_FACTOR);
+  image(worldgraphics, 0, 0);
+  //------------------------------------------------------------------------
+  //Mouse interaction
+  if (mousePressed) {
+    int mouseXLoc = mouseX/SCALE_FACTOR;
+    int mouseYLoc = mouseY/SCALE_FACTOR;
+    
+    if (mouseButton == LEFT) {
+      place(toggle ? OIL : SAND, mouseXLoc, mouseYLoc);
+    }
+    else if (mouseButton == CENTER) {
+      place(ROCK, mouseXLoc, mouseYLoc);
+    }
+    else if (mouseButton == RIGHT) {
+      place(toggle ? FIRE : WATER, mouseXLoc, mouseYLoc);
+    }
+  }
+  //--------------------------------------------------------------------------------------------------------------------------
+  //Class implementation
+  new Physics();
+  //--------------------------------------------------------------------------------------------------------------------------
+
+}
+//------------------------------------------------
+//Mouse wheel scroll to change brush size
+void mouseWheel(MouseEvent event) {
+  if (event.getCount() < 0) {
+    ++brushSize;
+  }
+  else {
+    --brushSize;
+    if (brushSize <= 0) { brushSize = 1; }
+  }
+  println("Brush size: " + brushSize);
+}
+//------------------------------------------------
+//Mouse wheel press to toggle particle types
+void keyPressed() {
+  if (key == ' ') {
+    toggle = !toggle;
+    
+    if (toggle) { println("OIL / ROCK / FIRE"); }
+    else { println("SAND / ROCK / WATER"); }
+  }
+}
+//------------------------------------------------------------------------------
+//Particle placement func
+void place(byte particle, int xPos, int yPos) {
+  for (int y=max(0,yPos-brushSize); y<min(HEIGHT-1, yPos+brushSize); ++y) {
+    for (int x=max(0,xPos-brushSize); x<min(WIDTH-1, xPos+brushSize); ++x) {
+      world[coord(x,y)] = particle;
+    }
+  }
+}
+//-------------------------------------------------------------------------------
+//Particle movement func
+void move(int fromX, int fromY, int toX, int toY) {
+  int fromCoord = coord(fromX, fromY);
+  int toCoord = coord(toX, toY);
+  byte otherSubstance = world[toCoord];
+  
+  world[toCoord] = world[fromCoord];
+  world[fromCoord] = otherSubstance;
+  hasMoved[toCoord] = true;
+  hasMoved[fromCoord] = true;
+  momentum[fromCoord] = 0;
+  
+  if (toX > fromX) { momentum[toCoord] = 1; }
+  else if (toX < fromX) { momentum[toCoord] = -1; }
+  else { momentum[toCoord] = 0; }
+}
+//--------------------------------------------------------------------------------------
+//Particle boolean func
+boolean canMove(byte particle, int x, int y) {
+  if (x<0 || x>=WIDTH || y<0 || y>=HEIGHT) return false;
+  byte otherParticle = world[coord(x,y)];
+  if (particle == FIRE) return (otherParticle == OIL);
+  if (otherParticle == AIR) return true;
+  if (particle == SAND && otherParticle == WATER && random(1f)<0.5f) return true;
+  return false;
+}
+//--------------------------------------------------------------------------------------
+//Particle coordinate func
+int coord(int x, int y) {
+  return x + y*WIDTH;
+}
